@@ -1,0 +1,2 @@
+[console_scripts]
+browser-agent = browser_agent.cli.main:main

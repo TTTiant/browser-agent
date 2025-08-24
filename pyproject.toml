@@ -1,0 +1,57 @@
+[project]
+name = "browser-agent"
+version = "0.1.0"
+description = "Minimal web agent with Playwright + Pydantic v2 and custom controller loop."
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+authors = [{name = "Tian"}]
+license = {text = "MIT"}
+dependencies = [
+  "playwright>=1.44.0",
+  "pydantic>=2.6.0",
+  "pydantic-settings>=2.2.0",
+  "typer>=0.12.3",
+  "rich>=13.7.1",
+  "anyio>=4.3.0",
+  "python-dotenv>=1.0.1"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2.0",
+  "pytest-asyncio>=0.23.0",
+  "ruff>=0.5.0",
+  "mypy>=1.7.0",
+  "pre-commit>=3.7.0"
+]
+
+[project.scripts]
+browser-agent = "browser_agent.cli.main:main"
+
+[tool.uv]
+dev-dependencies = [
+  "pytest>=8.2.0",
+  "pytest-asyncio>=0.23.0",
+  "ruff>=0.5.0",
+  "mypy>=1.7.0",
+  "pre-commit>=3.7.0"
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+lint.select = ["E", "F", "I", "UP", "B", "ASYNC", "RUF"]
+lint.ignore = ["E501", "RUF002", "RUF003"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+
+[build-system]
+requires = ["hatchling>=1.22"]
+build-backend = "hatchling.build"

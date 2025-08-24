@@ -1,0 +1,17 @@
+README.md
+pyproject.toml
+browser_agent/__init__.py
+browser_agent.egg-info/PKG-INFO
+browser_agent.egg-info/SOURCES.txt
+browser_agent.egg-info/dependency_links.txt
+browser_agent.egg-info/entry_points.txt
+browser_agent.egg-info/requires.txt
+browser_agent.egg-info/top_level.txt
+browser_agent/cli/main.py
+browser_agent/core/action.py
+browser_agent/core/errors.py
+browser_agent/core/registry.py
+browser_agent/core/settings.py
+browser_agent/io/driver.py
+browser_agent/io/playwright_driver.py
+tests/test_sanity.py

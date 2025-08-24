@@ -1,0 +1,32 @@
+Metadata-Version: 2.4
+Name: browser-agent
+Version: 0.1.0
+Summary: Minimal web agent with Playwright + Pydantic v2 and custom controller loop.
+Author: Tian
+License: MIT
+Requires-Python: <3.12,>=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: playwright>=1.44.0
+Requires-Dist: pydantic>=2.6.0
+Requires-Dist: pydantic-settings>=2.2.0
+Requires-Dist: typer>=0.12.3
+Requires-Dist: rich>=13.7.1
+Requires-Dist: anyio>=4.3.0
+Requires-Dist: python-dotenv>=1.0.1
+Provides-Extra: dev
+Requires-Dist: pytest>=8.2.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23.0; extra == "dev"
+Requires-Dist: ruff>=0.5.0; extra == "dev"
+Requires-Dist: mypy>=1.7.0; extra == "dev"
+Requires-Dist: pre-commit>=3.7.0; extra == "dev"
+
+# browser-agent
+Minimal web agent baseline using Python 3.11, Playwright + Chromium, Pydantic v2, custom planner/loop.
+
+## Quickstart
+uv venv --python 3.11
+source .venv/bin/activate
+uv sync
+uvx playwright install chromium
+pre-commit install
+browser-agent --help

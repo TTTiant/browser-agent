@@ -7,13 +7,42 @@
 """
 # @file purpose: Define error taxonomy for browser-agent.
 
+from typing import Optional
+
 
 class BrowserAgentError(Exception):
     """Base class for all custom errors in browser-agent."""
 
 
 class ActionExecutionError(BrowserAgentError):
-    """Raised when an action fails to execute."""
+    """
+    Raised when an action fails to execute.
+    动作执行期错误（元素缺失、超时、脚本异常等）。
+    统一封装上下文，便于 CLI/编排层打印一致的信息与诊断。
+    """
+
+    def __init__(
+        self,
+        action: str,
+        message: str,
+        *,
+        selector: str | None = None,
+        url: str | None = None,
+        cause: BaseException | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.action: str = action
+        self.selector: str | None = selector
+        self.url: str | None = url
+        self.cause: BaseException | None = cause
+
+    def __str__(self) -> str:
+        parts = [f"[{self.action}] {super().__str__()}"]
+        if self.selector:
+            parts.append(f"selector={self.selector}")
+        if self.url:
+            parts.append(f"url={self.url}")
+        return " | ".join(parts)
 
 
 class PolicyViolationError(BrowserAgentError):

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <title>Agent Smoke</title>
+    <style>body{font-family:system-ui;margin:24px} #result{margin-top:12px;font-weight:600}</style>
+  </head>
+  <body>
+    <h1>Agent Smoke</h1>
+
+    <label for="q">Query</label>
+    <input id="q" type="text" />
+    <button id="go">Go</button>
+
+    <div id="result" style="display:none;"></div>
+
+    <script>
+      document.getElementById('go').addEventListener('click', () => {
+        const v = document.getElementById('q').value || '';
+        const el = document.getElementById('result');
+        el.textContent = v.trim();
+        el.style.display = 'block';
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,4 @@
+[
+  {"name": "open_url", "args": {"url": "https://example.com/"}},
+  {"name": "extract_text", "args": {"selector": "h1"}}
+]

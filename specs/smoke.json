@@ -1,0 +1,7 @@
+[
+  {"name":"open_url","args":{"url":"http://127.0.0.1:8000/tests/fixtures/smoke.html"}},
+  {"name":"type","args":{"selector":"#q","text":"hello"}},
+  {"name":"click","args":{"selector":"#go"}},
+  {"name":"wait_for","args":{"selector":"#result","timeout_ms":5000}},
+  {"name":"extract_text","args":{"selector":"#result"}}
+]

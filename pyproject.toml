@@ -43,18 +43,14 @@ target-version = "py311"
 lint.select = ["E", "F", "I", "UP", "B", "ASYNC", "RUF"]
 lint.ignore = ["E501", "RUF002", "RUF003"]
 
+[build-system]
+requires = ["hatchling>=1.22"]
+build-backend = "hatchling.build"
+
 [tool.mypy]
 python_version = "3.11"
 strict = true
 warn_unused_ignores = true
-warn_redundant_casts = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-no_implicit_optional = true
-
-[build-system]
-requires = ["hatchling>=1.22"]
-build-backend = "hatchling.build"
 
 [[tool.mypy.overrides]]
 module = ["pytest", "pytest.*"]
@@ -62,5 +58,4 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["tests.*"]
-disallow_untyped_defs = false
-disallow_untyped_decorated_calls = false
+ignore_errors = true

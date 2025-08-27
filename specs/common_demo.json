@@ -1,0 +1,7 @@
+[
+  {"name": "open_url", "args": {"url": "http://127.0.0.1:8765/tests/fixtures/smoke.html"}},
+  {"name": "type", "args": {"selector": "#q", "text": "hello"}},
+  {"name": "check", "args": {"selector": "#agree"}},
+  {"name": "select_option", "args": {"selector": "#city", "value": "shanghai", "by": "value"}},
+  {"name": "snapshot", "args": {"path": "artifacts/demo.png", "full_page": true}}
+]

@@ -3,14 +3,39 @@
   <head>
     <meta charset="utf-8"/>
     <title>Agent Smoke</title>
-    <style>body{font-family:system-ui;margin:24px} #result{margin-top:12px;font-weight:600}</style>
+    <style>
+      body{font-family:system-ui;margin:24px}
+      #result{margin-top:12px;font-weight:600}
+      .row{margin-top:12px}
+      label{margin-right:8px}
+    </style>
   </head>
   <body>
     <h1>Agent Smoke</h1>
 
-    <label for="q">Query</label>
-    <input id="q" type="text" />
-    <button id="go">Go</button>
+    <!-- 1) 输入框：脚本 step #2 使用 -->
+    <div class="row">
+      <label for="q">Query</label>
+      <input id="q" type="text" />
+      <button id="go">Go</button>
+    </div>
+
+    <!-- 2) 复选框：脚本 step #3 `check` 需要 #agree 是 checkbox -->
+    <div class="row">
+      <input id="agree" type="checkbox" />
+      <label for="agree">I agree to the terms</label>
+    </div>
+
+    <!-- 3) 下拉框：脚本 step #4 `select_option` 使用 #city，by="value"，value="shanghai" -->
+    <div class="row">
+      <label for="city">City</label>
+      <select id="city">
+        <option value="">-- choose --</option>
+        <option value="beijing">Beijing</option>
+        <option value="shanghai">Shanghai</option>
+        <option value="guangzhou">Guangzhou</option>
+      </select>
+    </div>
 
     <div id="result" style="display:none;"></div>
 

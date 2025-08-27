@@ -10,20 +10,26 @@ Conforms to io/driver.py's BrowserDriver Protocol:
 - wait_for(ctx, selector, timeout_ms?)
 - text_content(ctx, selector) -> Optional[str]
 - screenshot(ctx, path)
+
+Extra primitives (common form ops):
+- upload(ctx, selector, file_path)
+- select_option(ctx, selector, value, by="value"|"label")
+- check(ctx, selector)
 """
-# @file purpose: Provide Playwright-based BrowserDriver implementation.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Optional, Dict, Any
+
+from pathlib import Path
 
 from playwright.async_api import (
     Browser,
     BrowserContext,
     Page,
-    Playwright,
     TimeoutError as PwTimeoutError,
     async_playwright,
+    Playwright,
 )
 
 
@@ -39,17 +45,14 @@ class PlaywrightDriver:
         *,
         headless: bool = True,
         slow_mo_ms: int = 0,
-        default_nav_timeout_ms: int = 30_000,
-        default_action_timeout_ms: int = 10_000,
+        default_timeout_ms: int = 30_000,
     ) -> None:
         self.headless = headless
         self.slow_mo_ms = slow_mo_ms
-        self.default_nav_timeout_ms = default_nav_timeout_ms
-        self.default_action_timeout_ms = default_action_timeout_ms
+        self.default_timeout_ms = default_timeout_ms
 
-        self._pw: Optional[Playwright] = None
+        self._pw: Optional[Playwright] = None  # playwright instance
         self._browser: Optional[Browser] = None
-        # Track which BrowserContext a Page belongs to so we can close cleanly.
         self._page_to_context: Dict[Page, BrowserContext] = {}
 
     # ---------------- lifecycle ----------------
@@ -65,7 +68,7 @@ class PlaywrightDriver:
     async def stop(self) -> None:
         """Close all contexts and stop Playwright."""
         try:
-            # Close all contexts we created
+            # close all pages/contexts we created
             for page, ctx in list(self._page_to_context.items()):
                 try:
                     await page.close()
@@ -76,7 +79,6 @@ class PlaywrightDriver:
                 except Exception:
                     pass
             self._page_to_context.clear()
-
             if self._browser is not None:
                 await self._browser.close()
         finally:
@@ -85,28 +87,27 @@ class PlaywrightDriver:
             self._pw = None
             self._browser = None
 
-    # ---------------- context/page management ----------------
-
-    async def new_context(self) -> Any:
+    async def new_context(self) -> Page:
         """
-        Create an incognito BrowserContext and a Page, return the Page as ctx.
-        The Protocol uses `Any` for ctx; here it's a Playwright Page.
+        Create a fresh incognito context + page.
+        Returns the Page object to be used as `ctx`.
         """
         self._ensure_started()
         assert self._browser is not None
         ctx = await self._browser.new_context()
+        # set a sensible default operation timeout on the context
+        ctx.set_default_timeout(self.default_timeout_ms)
         page = await ctx.new_page()
         self._page_to_context[page] = ctx
-        return page  # ctx
+        return page
 
     async def close_context(self, ctx: Any) -> None:
-        """Close the given Page and its BrowserContext."""
+        """Close the page and its owning context."""
         page = self._as_page(ctx)
-        # Close page first, then context
+        context = self._page_to_context.pop(page, None)
         try:
             await page.close()
         finally:
-            context = self._page_to_context.pop(page, None)
             if context is not None:
                 try:
                     await context.close()
@@ -115,54 +116,115 @@ class PlaywrightDriver:
 
     # ---------------- primitives ----------------
 
-    async def goto(self, ctx: Any, url: str) -> None:
-        """Navigate and wait for load."""
+    async def goto(self, ctx: Any, url: str, *, timeout_ms: Optional[int] = None) -> None:
         page = self._as_page(ctx)
-        await page.goto(url, timeout=self.default_nav_timeout_ms, wait_until="load")
+        await page.goto(url, timeout=timeout_ms or self.default_timeout_ms, wait_until="load")
 
-    async def click(self, ctx: Any, selector: str) -> None:
-        """Wait until visible, then click."""
+    async def wait_for(self, ctx: Any, selector: str, *, timeout_ms: Optional[int] = None) -> None:
         page = self._as_page(ctx)
         locator = page.locator(selector)
-        await locator.wait_for(state="visible", timeout=self.default_action_timeout_ms)
+        await locator.wait_for(state="visible", timeout=timeout_ms or self.default_timeout_ms)
+
+    async def click(self, ctx: Any, selector: str, *, timeout_ms: Optional[int] = None) -> None:
+        page = self._as_page(ctx)
+        locator = page.locator(selector)
+        to = timeout_ms or self.default_timeout_ms
+        await locator.wait_for(state="visible", timeout=to)
         await locator.scroll_into_view_if_needed()
-        await locator.click(timeout=self.default_action_timeout_ms)
+        await locator.click(timeout=to)
 
-    async def type_text(self, ctx: Any, selector: str, text: str) -> None:
+    async def type_text(
+        self,
+        ctx: Any,
+        selector: str,
+        text: str,
+        *,
+        timeout_ms: Optional[int] = None,
+        clear_first: bool = True,
+    ) -> None:
         """
-        Fill (preferred) or type into an input.
-        We try fill() first for determinism; fall back to type() if needed.
+        Prefer fill() for determinism; fall back to type() for tricky widgets.
         """
         page = self._as_page(ctx)
         locator = page.locator(selector)
-        await locator.wait_for(state="visible", timeout=self.default_action_timeout_ms)
+        to = timeout_ms or self.default_timeout_ms
+        await locator.wait_for(state="visible", timeout=to)
         await locator.scroll_into_view_if_needed()
-        try:
-            await locator.fill(text, timeout=self.default_action_timeout_ms)
-        except PwTimeoutError:
-            await locator.click(timeout=self.default_action_timeout_ms)
-            await locator.type(text, timeout=self.default_action_timeout_ms)
+        if clear_first:
+            try:
+                await locator.fill(text, timeout=to)
+                return
+            except PwTimeoutError:
+                pass  # fall back to click+type
+        await locator.click(timeout=to)
+        await locator.type(text, timeout=to)
 
-    async def wait_for(self, ctx: Any, selector: str, timeout_ms: int | None = None) -> None:
-        """Wait until the element is visible (or timeout)."""
+    async def text_content(
+        self, ctx: Any, selector: str, *, timeout_ms: Optional[int] = None
+    ) -> Optional[str]:
         page = self._as_page(ctx)
         locator = page.locator(selector)
-        to = self.default_action_timeout_ms if timeout_ms is None else timeout_ms
+        to = timeout_ms or self.default_timeout_ms
+        await locator.wait_for(state="visible", timeout=to)
+        await locator.scroll_into_view_if_needed()
+        text = await locator.first.text_content(timeout=to)
+        return text.strip() if text is not None else None
+
+    async def screenshot(self, ctx: Any, path: str, *, full_page: bool = True) -> None:
+        page = self._as_page(ctx)
+        # ensure parent dir exists
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        await page.screenshot(path=path, full_page=full_page)
+
+    # ----------- extra primitives for forms -----------
+
+    async def upload(
+        self, ctx: Any, selector: str, file_path: str, *, timeout_ms: Optional[int] = None
+    ) -> None:
+        """
+        Upload a local file to <input type="file"> via set_input_files().
+        """
+        page = self._as_page(ctx)
+        locator = page.locator(selector)
+        to = timeout_ms or self.default_timeout_ms
         await locator.wait_for(state="visible", timeout=to)
 
-    async def text_content(self, ctx: Any, selector: str) -> str | None:
-        """Return visible text for the first matched element (stripped)."""
+        # NEW: ensure file exists to avoid confusing Playwright error downstream
+        p = Path(file_path)
+        if not p.exists():
+            raise FileNotFoundError(f"upload(): file not found: {file_path}")
+        await locator.set_input_files(str(p), timeout=to)
+
+    async def select_option(
+        self,
+        ctx: Any,
+        selector: str,
+        value: str,
+        *,
+        by: str = "value",  # or "label"
+        timeout_ms: Optional[int] = None,
+    ) -> None:
+        """
+        Select an option in <select>. Choose by 'value' (default) or by 'label'.
+        """
         page = self._as_page(ctx)
         locator = page.locator(selector)
-        await locator.wait_for(state="visible", timeout=self.default_action_timeout_ms)
-        await locator.scroll_into_view_if_needed()
-        txt = await locator.first.text_content(timeout=self.default_action_timeout_ms)
-        return txt.strip() if txt is not None else None
+        to = timeout_ms or self.default_timeout_ms
+        await locator.wait_for(state="visible", timeout=to)
+        if by == "label":
+            await locator.select_option(label=value, timeout=to)
+        else:
+            await locator.select_option(value=value, timeout=to)
 
-    async def screenshot(self, ctx: Any, path: str) -> None:
-        """Take a full-page screenshot to the given path."""
+    async def check(self, ctx: Any, selector: str, *, timeout_ms: Optional[int] = None) -> None:
+        """
+        Check a checkbox/radio; no-op if already checked.
+        """
         page = self._as_page(ctx)
-        await page.screenshot(path=path, full_page=True)
+        locator = page.locator(selector)
+        to = timeout_ms or self.default_timeout_ms
+        await locator.wait_for(state="visible", timeout=to)
+        await locator.check(timeout=to)
 
     # ---------------- internals ----------------
 

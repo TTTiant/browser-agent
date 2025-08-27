@@ -10,3 +10,8 @@ test-results/
 .DS_Store
 .idea/
 .vscode/
+artifacts/
+artifacts/
+.pytest_cache/
+__pycache__/
+playwright/

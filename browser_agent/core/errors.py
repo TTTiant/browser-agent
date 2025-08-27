@@ -7,7 +7,7 @@
 """
 # @file purpose: Define error taxonomy for browser-agent.
 
-from typing import Optional
+from typing import Any
 
 
 class BrowserAgentError(Exception):
@@ -28,12 +28,14 @@ class ActionExecutionError(BrowserAgentError):
         *,
         selector: str | None = None,
         url: str | None = None,
+        details: dict[str, Any] | None = None,
         cause: BaseException | None = None,
     ) -> None:
         super().__init__(message)
         self.action: str = action
         self.selector: str | None = selector
         self.url: str | None = url
+        self.details: dict[str, Any] = details or {}
         self.cause: BaseException | None = cause
 
     def __str__(self) -> str:
@@ -42,6 +44,10 @@ class ActionExecutionError(BrowserAgentError):
             parts.append(f"selector={self.selector}")
         if self.url:
             parts.append(f"url={self.url}")
+        if self.details:
+            # 简单序列化 details，避免过长
+            kv = ", ".join(f"{k}={v!r}" for k, v in self.details.items())
+            parts.append(f"details={{ {kv} }}")
         return " | ".join(parts)
 
 

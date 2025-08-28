@@ -15,3 +15,28 @@ artifacts/
 .pytest_cache/
 __pycache__/
 playwright/
+
+# --- project artifacts ---
+artifacts/
+*.png
+*.csv
+*.json
+
+# --- Python cache ---
+__pycache__/
+*.pyc
+*.pyo
+
+# --- Virtual env ---
+.venv/
+env/
+venv/
+
+# --- IDE configs ---
+.idea/
+.vscode/
+
+# --- Test / coverage ---
+.coverage
+htmlcov/
+.pytest_cache/

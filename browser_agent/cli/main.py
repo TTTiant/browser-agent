@@ -25,6 +25,11 @@ from ..core.errors import ActionExecutionError
 from ..core.controller.runner import Runner, StepOutcome
 from ..io.playwright_driver import PlaywrightDriver
 
+from browser_agent.reporting.schemas import JobItem, ApplyResult, ApplyStep, DailyReport
+from browser_agent.reporting.writer import write_report
+from browser_agent.actions.sites.demo import DemoConfig, build_job_apply_specs
+
+
 app = typer.Typer(help="browser-agent CLI")
 console = Console()
 
@@ -173,6 +178,111 @@ def run(
     if code != 0:
         raise typer.Exit(code=code)
     typer.secho("[run] completed successfully", fg=typer.colors.GREEN)
+
+
+@app.command("daily")
+def daily(
+    site: str = typer.Option("demo", help="Site adapter name"),
+    urls_file: Path = typer.Option(None, help="Text file with one job URL per line"),
+    limit: int = typer.Option(5, help="Max number of jobs"),
+    out_dir: Path = typer.Option(Path("artifacts"), help="Output directory for reports"),
+    headless: bool = typer.Option(True, "--headless/--no-headless"),
+    slowmo: int = typer.Option(0, "--slowmo"),
+    retries: int = typer.Option(0, "--retries"),
+    random_delay_ms: Tuple[int, int] = typer.Option((0, 0), "--random-delay-ms"),
+) -> None:
+    # ensure actions registered
+    try:
+        import browser_agent.actions.impl  # noqa: F401
+    except Exception as e:
+        typer.secho(f"[daily] failed to import actions: {e}", fg=typer.colors.RED)
+        raise typer.Exit(code=2)
+
+    async def _run() -> int:
+        from ..core.controller.runner import Runner, StepOutcome  # lazy import
+
+        driver = PlaywrightDriver(headless=headless, slow_mo_ms=slowmo)
+        await driver.start()
+        ctx = await driver.new_context()
+        try:
+            # build url list
+            job_urls: list[str] = []
+            if urls_file and urls_file.exists():
+                for line in urls_file.read_text(encoding="utf-8").splitlines():
+                    s = line.strip()
+                    if s:
+                        job_urls.append(s)
+            else:
+                job_urls.append("http://127.0.0.1:8765/tests/fixtures/smoke.html")
+
+            rnd = None if (random_delay_ms[0] == 0 and random_delay_ms[1] == 0) else random_delay_ms
+            runner = Runner(retries=retries, artifacts_dir=out_dir, random_delay_ms=rnd)
+
+            results: list[ApplyResult] = []
+            for url in job_urls[:limit]:
+                cfg = DemoConfig(url=url)
+                specs = build_job_apply_specs(cfg)
+                rows: list[StepOutcome] = await runner.run(driver, ctx, specs)
+
+                # map outcomes -> report
+                steps: list[ApplyStep] = []
+                ok = True
+                err = None
+                company = title = salary = location = None
+                for r in rows:
+                    sel = r.meta.get("selector") if (r.meta and isinstance(r.meta, dict)) else None
+                    steps.append(
+                        ApplyStep(
+                            index=r.index,
+                            name=r.name,
+                            ok=r.ok,
+                            selector=sel,
+                            extracted=r.extracted,
+                            meta=(r.meta or {}),
+                            artifact_path=r.artifact_path,
+                            detail=r.detail,
+                        )
+                    )
+                    if not r.ok:
+                        ok = False
+                        err = err or r.detail
+                    if sel == "#company" and r.extracted:
+                        company = r.extracted
+                    elif sel == "#title" and r.extracted:
+                        title = r.extracted
+                    elif sel == "#salary" and r.extracted:
+                        salary = r.extracted
+                    elif sel == "#location" and r.extracted:
+                        location = r.extracted
+
+                results.append(
+                    ApplyResult(
+                        job=JobItem(
+                            url=url, company=company, title=title, salary=salary, location=location
+                        ),
+                        ok=ok,
+                        steps=steps,
+                        error=err,
+                    )
+                )
+
+            report = DailyReport(
+                site=site,
+                total=len(results),
+                success=sum(1 for r in results if r.ok),
+                failure=sum(1 for r in results if not r.ok),
+                items=results,
+            )
+            json_path, csv_path = write_report(report, out_dir)
+            console.print(f"[bold green]Report written[/]: {json_path}  |  {csv_path}")
+            return 0
+        finally:
+            await driver.close_context(ctx)
+            await driver.stop()
+
+    code = asyncio.run(_run())
+    if code != 0:
+        raise typer.Exit(code=code)
 
 
 def main() -> None:

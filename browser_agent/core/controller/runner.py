@@ -7,7 +7,7 @@ Responsibilities:
 - Execute actions with retries
 - Optional random per-step delay
 - On failure: save screenshot artifact (if artifacts_dir is set)
-- Return per-step outcomes for CLI rendering
+- Return per-step outcomes for CLI rendering and reporting
 """
 
 from __future__ import annotations
@@ -16,24 +16,27 @@ import asyncio
 import random
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import ValidationError
 
-from ..action import ActionSpec
 from .. import registry
+from ..action import ActionSpec
 from ..errors import ActionExecutionError
 
 
 @dataclass
 class StepOutcome:
-    """UI-friendly outcome used by CLI to render a table."""
+    """UI-friendly outcome used by CLI and reporters."""
 
     index: int
     name: str
     ok: bool
     detail: str = "-"
-    artifact_path: Optional[str] = None
+    artifact_path: str | None = None
+    # Filled from ActionResult on success:
+    extracted: str | None = None  # e.g., text extracted by extract_text
+    meta: dict[str, Any] | None = None  # e.g., {"selector": "#company"} or {"url": "..."}
 
 
 class Runner:
@@ -41,7 +44,7 @@ class Runner:
         self,
         *,
         retries: int = 0,
-        artifacts_dir: Optional[Path] = None,
+        artifacts_dir: Path | None = None,
         random_delay_ms: tuple[int, int] | None = None,
     ) -> None:
         self.retries = max(0, retries)
@@ -80,7 +83,7 @@ class Runner:
                     fn = registry.get_action(name)
                     res = await fn(driver, ctx, params)
 
-                    # Build a human-friendly detail for the CLI
+                    # Human-friendly detail for CLI
                     detail = "-"
                     if getattr(res, "extracted_content", None):
                         text = res.extracted_content
@@ -90,14 +93,26 @@ class Runner:
                             else str(text)
                         )
                     elif isinstance(getattr(res, "meta", None), dict):
-                        # Prefer a URL if present, otherwise a compact meta repr
                         m = res.meta
                         if "url" in m:
                             detail = str(m["url"])
                         elif "selector" in m:
                             detail = f'selector="{m["selector"]}"'
 
-                    outcomes.append(StepOutcome(index=i, name=name, ok=bool(res.ok), detail=detail))
+                    # --- SUCCESS PAYLOAD FILL ---
+                    extracted = getattr(res, "extracted_content", None)
+                    meta = res.meta if isinstance(getattr(res, "meta", None), dict) else None
+
+                    outcomes.append(
+                        StepOutcome(
+                            index=i,
+                            name=name,
+                            ok=bool(res.ok),
+                            detail=detail,
+                            extracted=extracted,
+                            meta=meta,
+                        )
+                    )
                     break
 
                 except ActionExecutionError as e:
@@ -106,7 +121,11 @@ class Runner:
                         artifact = await self._on_failure(driver, ctx, i, name)
                         outcomes.append(
                             StepOutcome(
-                                index=i, name=name, ok=False, detail=str(e), artifact_path=artifact
+                                index=i,
+                                name=name,
+                                ok=False,
+                                detail=str(e),
+                                artifact_path=artifact,
                             )
                         )
                         break
@@ -127,7 +146,7 @@ class Runner:
         ms = random.randint(low, high)
         await asyncio.sleep(ms / 1000)
 
-    async def _on_failure(self, driver: Any, ctx: Any, index: int, name: str) -> Optional[str]:
+    async def _on_failure(self, driver: Any, ctx: Any, index: int, name: str) -> str | None:
         """Best-effort failure artifact (screenshot)."""
         if not self.artifacts_dir:
             return None
